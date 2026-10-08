@@ -2,9 +2,10 @@
 
 End-to-end PDF RAG: Upload PDFs -> Extract -> Chunk -> FastEmbed -> FAISS -> Retrieve -> Ollama LLM -> Answer + Sources (Streamlit UI).
 
-## Status: Phase 1 complete (PDF text extraction)
+## Status: Phase 2 complete (chunking)
 
 - `src/pdf_processor.py`: `extract_text_from_pdf()` returns `[{"text": ..., "page": 1}]`, 1-indexed, skips empty pages.
+- `src/chunker.py`: `chunk_pages()` returns `[{chunk_id, text, page, document}]`, sentence-aware, per-page, configurable size/overlap (defaults 1000/200).
 - Choices: `pypdf` (pure-Python, simple install), Ollama local (`OLLAMA_HOST`/`OLLAMA_MODEL` in `.env`), FastEmbed `BAAI/bge-small-en-v1.5` (384-dim, Phase 3).
 
 ## Architecture (target)
