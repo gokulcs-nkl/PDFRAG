@@ -1,0 +1,10 @@
+# Core runtime
+streamlit
+pypdf>=4
+fastembed
+faiss-cpu
+ollama
+python-dotenv
+# Testing / fixture generation (Phase 1 verifies extraction with generated PDFs)
+pytest
+reportlab
