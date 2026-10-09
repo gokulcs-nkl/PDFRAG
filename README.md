@@ -2,11 +2,12 @@
 
 End-to-end PDF RAG: Upload PDFs -> Extract -> Chunk -> FastEmbed -> FAISS -> Retrieve -> Ollama LLM -> Answer + Sources (Streamlit UI).
 
-## Status: Phase 3 complete (embeddings)
+## Status: Phase 4 complete (FAISS index)
 
 - `src/pdf_processor.py`: `extract_text_from_pdf()` returns `[{"text": ..., "page": 1}]`, 1-indexed, skips empty pages.
 - `src/chunker.py`: `chunk_pages()` returns `[{chunk_id, text, page, document}]`, sentence-aware, per-page, configurable size/overlap (defaults 1000/200).
 - `src/embeddings.py`: `EmbeddingModel` singleton (`BAAI/bge-small-en-v1.5`, 384-dim) with `embed_documents()` / `embed_query()`; same model for docs + queries. First run downloads ~130MB (takes ~1-2 min), then cached.
+- `src/vector_store.py`: `FaissVectorStore` (exact `IndexFlatIP` + L2-normalize = cosine); `add()` keeps 1:1 metadata alignment, `search()` returns top-K `[{..., score}]`, `clear()` for UI reset.
 - Choices: `pypdf` (pure-Python, simple install), Ollama local (`OLLAMA_HOST`/`OLLAMA_MODEL` in `.env`), FastEmbed `BAAI/bge-small-en-v1.5` (384-dim, Phase 3).
 
 ## Architecture (target)
