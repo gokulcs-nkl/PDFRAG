@@ -1,0 +1,4 @@
+# Local development: runtime + testing / PDF fixture generation.
+-r requirements.txt
+pytest
+reportlab

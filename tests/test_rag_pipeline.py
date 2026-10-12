@@ -97,6 +97,86 @@ def test_query_wiring_with_stubbed_llm(docs, monkeypatch):
     assert result["sources"][0]["page"] == 1
 
 
+def test_history_reaches_llm_and_steers_retrieval(docs, monkeypatch):
+    pipe = RagPipeline(chunk_size=500, chunk_overlap=0)
+    pipe.ingest_documents(docs)
+    seen: dict = {}
+
+    def fake_generate(question, hits, history=None, **kwargs):
+        seen.update(question=question, history=history, top=hits[0]["document"])
+        return "STUB"
+
+    monkeypatch.setattr(pipeline_mod, "generate_answer", fake_generate)
+    follow_up = "What drove it?"
+    history = [{"question": "What was the revenue in 2024?", "answer": "Ten million dollars."}]
+
+    pipe.query(follow_up, top_k=1, history=history)
+    # The LLM gets the question as asked plus the turns; only the
+    # retrieval query is augmented with the previous question.
+    assert seen["question"] == follow_up
+    assert seen["history"] == history
+    assert seen["top"] == "annual.pdf"
+
+    pipe.query("Tell me about Python syntax.", top_k=1, history=None)
+    assert seen["history"] is None
+    assert seen["top"] == "notes.pdf"
+
+
+def test_failed_replace_keeps_existing_document(docs):
+    pipe = RagPipeline(chunk_size=500, chunk_overlap=0)
+    pipe.ingest_documents(docs)
+    before = pipe.num_chunks
+    report = pipe.ingest_documents([("annual.pdf", _blank_pdf())], replace=True)
+    assert "annual.pdf" in report["skipped"]
+    assert pipe.num_chunks == before
+    assert pipe.documents == ["annual.pdf", "notes.pdf"]
+
+
+def test_query_stream_returns_sources_then_pieces(docs, monkeypatch):
+    pipe = RagPipeline(chunk_size=500, chunk_overlap=0)
+    pipe.ingest_documents(docs)
+    monkeypatch.setattr(
+        pipeline_mod, "stream_answer", lambda question, hits, **kw: iter(["Ten ", "million."])
+    )
+    sources, pieces = pipe.query_stream("What was the revenue?", top_k=1)
+    assert sources[0]["document"] == "annual.pdf"
+    assert "".join(pieces) == "Ten million."
+    with pytest.raises(ValueError, match="non-empty"):
+        pipe.query_stream("   ")
+
+
+def test_documents_filter_restricts_retrieval(docs, monkeypatch):
+    pipe = RagPipeline(chunk_size=500, chunk_overlap=0)
+    pipe.ingest_documents(docs)
+    monkeypatch.setattr(pipeline_mod, "generate_answer", lambda *a, **kw: "STUB")
+    question = "What was the revenue in 2024?"
+    assert pipe.query(question, top_k=1)["sources"][0]["document"] == "annual.pdf"
+    only_notes = pipe.query(question, top_k=5, documents=["notes.pdf"])["sources"]
+    assert only_notes and {h["document"] for h in only_notes} == {"notes.pdf"}
+    assert pipe.query(question, documents=["missing.pdf"])["sources"] == []
+    with pytest.raises(ValueError, match="top_k"):
+        pipe.query(question, top_k=0, documents=["notes.pdf"])
+
+
+def test_document_stats_and_remove(docs, monkeypatch):
+    pipe = RagPipeline(chunk_size=500, chunk_overlap=0)
+    pipe.ingest_documents(docs)
+    assert pipe.document_stats() == [
+        {"document": "annual.pdf", "pages": 1, "chunks": 1},
+        {"document": "notes.pdf", "pages": 1, "chunks": 1},
+    ]
+    assert pipe.remove_document("annual.pdf") is True
+    assert pipe.remove_document("annual.pdf") is False
+    assert pipe.documents == ["notes.pdf"]
+    assert pipe.num_chunks == 1
+    # The index no longer returns the removed document, even for its topic.
+    monkeypatch.setattr(pipeline_mod, "generate_answer", lambda *a, **kw: "STUB")
+    sources = pipe.query("What was the revenue in 2024?", top_k=5)["sources"]
+    assert {h["document"] for h in sources} == {"notes.pdf"}
+    # And it can be ingested again without replace=True.
+    assert pipe.ingest_documents([docs[0]])["documents_added"] == ["annual.pdf"]
+
+
 def test_clear_resets_everything(docs):
     pipe = RagPipeline(chunk_size=500, chunk_overlap=0)
     pipe.ingest_documents(docs)

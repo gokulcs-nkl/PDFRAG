@@ -1,0 +1,9 @@
+[server]
+# Per-file upload cap in MB. Keeps a free cloud instance within its memory.
+maxUploadSize = 25
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#2563eb"
