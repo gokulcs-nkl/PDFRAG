@@ -42,6 +42,10 @@ from fastembed import TextEmbedding
 
 DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 EXPECTED_DIM = 384
+# FastEmbed's default batch of 256 makes ONNX Runtime allocate gigabytes on
+# ~1000-char chunks (measured: 1000 chunks -> 3.4 GB at 256, 0.35 GB at 8,
+# same speed). Small batches keep ingestion within a 1 GB cloud instance.
+EMBED_BATCH_SIZE = 8
 
 _lock = threading.Lock()
 _instance: "EmbeddingModel | None" = None
@@ -67,7 +71,7 @@ class EmbeddingModel:
         if not texts:
             return np.zeros((0, self.dim), dtype=np.float32)
         cleaned = [t if t and t.strip() else " " for t in texts]
-        vectors = list(self._model.embed(cleaned))
+        vectors = list(self._model.embed(cleaned, batch_size=EMBED_BATCH_SIZE))
         return np.asarray(vectors, dtype=np.float32)
 
     def embed_query(self, text: str) -> np.ndarray:
